@@ -59,6 +59,8 @@ auth_response = base64_encode(auth_response_hash)
     + [TransitionListChanged](#transitionlistchanged)
     + [TransitionDurationChanged](#transitiondurationchanged)
     + [TransitionBegin](#transitionbegin)
+    + [TransitionEnd](#transitionend)
+    + [TransitionVideoEnd](#transitionvideoend)
   * [Profiles](#profiles)
     + [ProfileChanged](#profilechanged)
     + [ProfileListChanged](#profilelistchanged)
@@ -95,11 +97,13 @@ auth_response = base64_encode(auth_response_hash)
     + [SourceRenamed](#sourcerenamed)
     + [SourceFilterAdded](#sourcefilteradded)
     + [SourceFilterRemoved](#sourcefilterremoved)
+    + [SourceFilterVisibilityChanged](#sourcefiltervisibilitychanged)
     + [SourceFiltersReordered](#sourcefiltersreordered)
     + [SourceOrderChanged](#sourceorderchanged)
     + [SceneItemAdded](#sceneitemadded)
     + [SceneItemRemoved](#sceneitemremoved)
     + [SceneItemVisibilityChanged](#sceneitemvisibilitychanged)
+    + [SceneItemLockChanged](#sceneitemlockchanged)
     + [SceneItemTransformChanged](#sceneitemtransformchanged)
     + [SceneItemSelected](#sceneitemselected)
     + [SceneItemDeselected](#sceneitemdeselected)
@@ -117,6 +121,7 @@ auth_response = base64_encode(auth_response_hash)
     + [GetStats](#getstats)
     + [BroadcastCustomMessage](#broadcastcustommessage-1)
     + [GetVideoInfo](#getvideoinfo)
+    + [OpenProjector](#openprojector)
   * [Outputs](#outputs)
     + [ListOutputs](#listoutputs)
     + [GetOutputInfo](#getoutputinfo)
@@ -178,11 +183,13 @@ auth_response = base64_encode(auth_response_hash)
     + [SetBrowserSourceProperties](#setbrowsersourceproperties)
     + [GetSpecialSources](#getspecialsources)
     + [GetSourceFilters](#getsourcefilters)
+    + [GetSourceFilterInfo](#getsourcefilterinfo)
     + [AddFilterToSource](#addfiltertosource)
     + [RemoveFilterFromSource](#removefilterfromsource)
     + [ReorderSourceFilter](#reordersourcefilter)
     + [MoveSourceFilter](#movesourcefilter)
     + [SetSourceFilterSettings](#setsourcefiltersettings)
+    + [SetSourceFilterVisibility](#setsourcefiltervisibility)
     + [TakeSourceScreenshot](#takesourcescreenshot)
   * [Streaming](#streaming-1)
     + [GetStreamingStatus](#getstreamingstatus)
@@ -219,9 +226,11 @@ These are complex types, such as `Source` and `Scene`, which are used as argumen
 | ---- | :---: | ------------|
 | `cy` | _Number_ |  |
 | `cx` | _Number_ |  |
+| `alignment` | _Number_ | The point on the source that the item is manipulated from. The sum of 1=Left or 2=Right, and 4=Top or 8=Bottom, or omit to center on that axis. |
 | `name` | _String_ | The name of this Scene Item. |
 | `id` | _int_ | Scene item ID |
 | `render` | _Boolean_ | Whether or not this Scene Item is set to "visible". |
+| `muted` | _Boolean_ | Whether or not this Scene Item is muted. |
 | `locked` | _Boolean_ | Whether or not this Scene Item is locked and can't be moved around |
 | `source_cx` | _Number_ |  |
 | `source_cy` | _Number_ |  |
@@ -429,6 +438,47 @@ A transition (other than "cut") has begun.
 | Name | Type  | Description |
 | ---- | :---: | ------------|
 | `name` | _String_ | Transition name. |
+| `type` | _String_ | Transition type. |
+| `duration` | _int_ | Transition duration (in milliseconds). Will be -1 for any transition with a fixed duration, such as a Stinger, due to limitations of the OBS API. |
+| `from-scene` | _String_ | Source scene of the transition |
+| `to-scene` | _String_ | Destination scene of the transition |
+
+
+---
+
+### TransitionEnd
+
+
+- Added in v4.8.0
+
+A transition (other than "cut") has ended.
+Please note that the `from-scene` field is not available in TransitionEnd.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `name` | _String_ | Transition name. |
+| `type` | _String_ | Transition type. |
+| `duration` | _int_ | Transition duration (in milliseconds). |
+| `to-scene` | _String_ | Destination scene of the transition |
+
+
+---
+
+### TransitionVideoEnd
+
+
+- Added in v4.8.0
+
+A stinger transition has finished playing its video.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `name` | _String_ | Transition name. |
+| `type` | _String_ | Transition type. |
 | `duration` | _int_ | Transition duration (in milliseconds). |
 | `from-scene` | _String_ | Source scene of the transition |
 | `to-scene` | _String_ | Destination scene of the transition |
@@ -917,6 +967,24 @@ A filter was removed from a source.
 
 ---
 
+### SourceFilterVisibilityChanged
+
+
+- Added in v4.7.0
+
+The visibility/enabled state of a filter changed
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `filterName` | _String_ | Filter name |
+| `filterEnabled` | _Boolean_ | New filter state |
+
+
+---
+
 ### SourceFiltersReordered
 
 
@@ -1006,6 +1074,25 @@ An item's visibility has been toggled.
 | `item-name` | _String_ | Name of the item in the scene. |
 | `item-id` | _int_ | Scene item ID |
 | `item-visible` | _boolean_ | New visibility state of the item. |
+
+
+---
+
+### SceneItemLockChanged
+
+
+- Unreleased
+
+An item's locked status has been toggled.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `scene-name` | _String_ | Name of the scene. |
+| `item-name` | _String_ | Name of the item in the scene. |
+| `item-id` | _int_ | Scene item ID |
+| `item-locked` | _boolean_ | New locked state of the item. |
 
 
 ---
@@ -1137,6 +1224,7 @@ _No specified parameters._
 | `obs-websocket-version` | _String_ | obs-websocket plugin version. |
 | `obs-studio-version` | _String_ | OBS Studio program version. |
 | `available-requests` | _String_ | List of available request types, formatted as a comma-separated list string (e.g. : "Method1,Method2,Method3"). |
+| `supported-image-export-formats` | _String_ | List of supported formats for features that use image export (like the TakeSourceScreenshot request type) formatted as a comma-separated list string |
 
 
 ---
@@ -1310,6 +1398,29 @@ _No specified parameters._
 | `colorSpace` | _String_ | Color space for YUV |
 | `colorRange` | _String_ | Color range (full or partial) |
 
+
+---
+
+### OpenProjector
+
+
+- Unreleased
+
+Open a projector window or create a projector on a monitor. Requires OBS v24.0.4 or newer.
+
+**Request Fields:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `type` | _String (Optional)_ | Type of projector: Preview (default), Source, Scene, StudioProgram, or Multiview (case insensitive). |
+| `monitor` | _int (Optional)_ | Monitor to open the projector on. If -1 or omitted, opens a window. |
+| `geometry` | _String (Optional)_ | Size and position of the projector window (only if monitor is -1). Encoded in Base64 using Qt's geometry encoding (https://doc.qt.io/qt-5/qwidget.html#saveGeometry). Corresponds to OBS's saved projectors. |
+| `name` | _String (Optional)_ | Name of the source or scene to be displayed (ignored for other projector types). |
+
+
+**Response Items:**
+
+_No additional response items._
 
 ---
 
@@ -1769,6 +1880,7 @@ Coordinates are relative to the item's parent (the scene or group it belongs to)
 | `crop.bottom` | _int_ | The number of pixels cropped off the bottom of the source before scaling. |
 | `crop.left` | _int_ | The number of pixels cropped off the left of the source before scaling. |
 | `visible` | _bool_ | If the source is visible. |
+| `muted` | _bool_ | If the source is muted. |
 | `locked` | _bool_ | If the source's transform is locked. |
 | `bounds.type` | _String_ | Type of bounding box. Can be "OBS_BOUNDS_STRETCH", "OBS_BOUNDS_SCALE_INNER", "OBS_BOUNDS_SCALE_OUTER", "OBS_BOUNDS_SCALE_TO_WIDTH", "OBS_BOUNDS_SCALE_TO_HEIGHT", "OBS_BOUNDS_MAX_ONLY" or "OBS_BOUNDS_NONE". |
 | `bounds.alignment` | _int_ | Alignment of the bounding box. |
@@ -1778,6 +1890,9 @@ Coordinates are relative to the item's parent (the scene or group it belongs to)
 | `sourceHeight` | _int_ | Base source (without scaling) of the source |
 | `width` | _double_ | Scene item width (base source width multiplied by the horizontal scaling factor) |
 | `height` | _double_ | Scene item height (base source height multiplied by the vertical scaling factor) |
+| `alignment` | _int_ | The point on the source that the item is manipulated from. The sum of 1=Left or 2=Right, and 4=Top or 8=Bottom, or omit to center on that axis. |
+| `parentGroupName` | _String (optional)_ | Name of the item's parent (if this item belongs to a group) |
+| `groupChildren` | _Array&lt;SceneItemTransform&gt; (optional)_ | List of children (if this item is a group) |
 
 
 ---
@@ -2619,9 +2734,37 @@ List filters applied to a source
 | Name | Type  | Description |
 | ---- | :---: | ------------|
 | `filters` | _Array&lt;Object&gt;_ | List of filters for the specified source |
+| `filters.*.enabled` | _Boolean_ | Filter status (enabled or not) |
 | `filters.*.type` | _String_ | Filter type |
 | `filters.*.name` | _String_ | Filter name |
 | `filters.*.settings` | _Object_ | Filter settings |
+
+
+---
+
+### GetSourceFilterInfo
+
+
+- Added in v4.7.0
+
+List filters applied to a source
+
+**Request Fields:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `filterName` | _String_ | Source filter name |
+
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `enabled` | _Boolean_ | Filter status (enabled or not) |
+| `type` | _String_ | Filter type |
+| `name` | _String_ | Filter name |
+| `settings` | _Object_ | Filter settings |
 
 
 ---
@@ -2736,6 +2879,28 @@ _No additional response items._
 
 ---
 
+### SetSourceFilterVisibility
+
+
+- Added in v4.7.0
+
+Change the visibility/enabled state of a filter
+
+**Request Fields:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `filterName` | _String_ | Source filter name |
+| `filterEnabled` | _Boolean_ | New filter state |
+
+
+**Response Items:**
+
+_No additional response items._
+
+---
+
 ### TakeSourceScreenshot
 
 
@@ -2831,9 +2996,9 @@ Will return an `error` if streaming is already active.
 | `stream.settings` | _Object (optional)_ | Settings for the stream. |
 | `stream.settings.server` | _String (optional)_ | The publish URL. |
 | `stream.settings.key` | _String (optional)_ | The publish key of the stream. |
-| `stream.settings.use-auth` | _boolean (optional)_ | Indicates whether authentication should be used when connecting to the streaming server. |
-| `stream.settings.username` | _String (optional)_ | If authentication is enabled, the username for the streaming server. Ignored if `use-auth` is not set to `true`. |
-| `stream.settings.password` | _String (optional)_ | If authentication is enabled, the password for the streaming server. Ignored if `use-auth` is not set to `true`. |
+| `stream.settings.use_auth` | _boolean (optional)_ | Indicates whether authentication should be used when connecting to the streaming server. |
+| `stream.settings.username` | _String (optional)_ | If authentication is enabled, the username for the streaming server. Ignored if `use_auth` is not set to `true`. |
+| `stream.settings.password` | _String (optional)_ | If authentication is enabled, the password for the streaming server. Ignored if `use_auth` is not set to `true`. |
 
 
 **Response Items:**
@@ -2875,7 +3040,7 @@ Sets one or more attributes of the current streaming server settings. Any option
 | `settings` | _Object_ | The actual settings of the stream. |
 | `settings.server` | _String (optional)_ | The publish URL. |
 | `settings.key` | _String (optional)_ | The publish key. |
-| `settings.use-auth` | _boolean (optional)_ | Indicates whether authentication should be used when connecting to the streaming server. |
+| `settings.use_auth` | _boolean (optional)_ | Indicates whether authentication should be used when connecting to the streaming server. |
 | `settings.username` | _String (optional)_ | The username for the streaming service. |
 | `settings.password` | _String (optional)_ | The password for the streaming service. |
 | `save` | _boolean_ | Persist the settings to disk. |
@@ -2906,9 +3071,9 @@ _No specified parameters._
 | `settings` | _Object_ | Stream settings object. |
 | `settings.server` | _String_ | The publish URL. |
 | `settings.key` | _String_ | The publish key of the stream. |
-| `settings.use-auth` | _boolean_ | Indicates whether authentication should be used when connecting to the streaming server. |
-| `settings.username` | _String_ | The username to use when accessing the streaming server. Only present if `use-auth` is `true`. |
-| `settings.password` | _String_ | The password to use when accessing the streaming server. Only present if `use-auth` is `true`. |
+| `settings.use_auth` | _boolean_ | Indicates whether authentication should be used when connecting to the streaming server. |
+| `settings.username` | _String_ | The username to use when accessing the streaming server. Only present if `use_auth` is `true`. |
+| `settings.password` | _String_ | The password to use when accessing the streaming server. Only present if `use_auth` is `true`. |
 
 
 ---
