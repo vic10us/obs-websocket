@@ -23,26 +23,14 @@
 
 #include <QtWidgets/QPushButton>
 
-#include "Config.h"
-#include "Utils.h"
 #include "WSEvents.h"
 
 #include "obs-websocket.h"
+#include "Config.h"
+#include "Utils.h"
+#include "rpc/RpcEvent.h"
 
 #define STATUS_INTERVAL 2000
-
-QString nsToTimestamp(uint64_t ns) {
-	uint64_t ms = ns / 1000000ULL;
-	uint64_t secs = ms / 1000ULL;
-	uint64_t minutes = secs / 60ULL;
-
-	uint64_t hoursPart = minutes / 60ULL;
-	uint64_t minutesPart = minutes % 60ULL;
-	uint64_t secsPart = secs % 60ULL;
-	uint64_t msPart = ms % 1000ULL;
-
-	return QString::asprintf("%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 ".%03" PRIu64, hoursPart, minutesPart, secsPart, msPart);
-}
 
 const char* sourceTypeToString(obs_source_type type) {
 	switch (type) {
@@ -134,7 +122,7 @@ void WSEvents::FrontendEventHandler(enum obs_frontend_event event, void* private
 
 	switch (event) {
 		case OBS_FRONTEND_EVENT_FINISHED_LOADING:
-			owner->hookTransitionBeginEvent();
+			owner->hookTransitionPlaybackEvents();
 			break;
 	
 		case OBS_FRONTEND_EVENT_SCENE_CHANGED:
@@ -146,7 +134,7 @@ void WSEvents::FrontendEventHandler(enum obs_frontend_event event, void* private
 			break;
 
 		case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
-			owner->hookTransitionBeginEvent();
+			owner->hookTransitionPlaybackEvents();
 			owner->OnSceneCollectionChange();
 			break;
 
@@ -159,7 +147,7 @@ void WSEvents::FrontendEventHandler(enum obs_frontend_event event, void* private
 			break;
 
 		case OBS_FRONTEND_EVENT_TRANSITION_LIST_CHANGED:
-			owner->hookTransitionBeginEvent();
+			owner->hookTransitionPlaybackEvents();
 			owner->OnTransitionListChange();
 			break;
 
@@ -243,7 +231,7 @@ void WSEvents::FrontendEventHandler(enum obs_frontend_event event, void* private
 			break;
 
 		case OBS_FRONTEND_EVENT_EXIT:
-			owner->unhookTransitionBeginEvent();
+			owner->unhookTransitionPlaybackEvents();
 			owner->OnExit();
 			break;
 	}
@@ -252,28 +240,11 @@ void WSEvents::FrontendEventHandler(enum obs_frontend_event event, void* private
 void WSEvents::broadcastUpdate(const char* updateType,
 	obs_data_t* additionalFields = nullptr)
 {
-	OBSDataAutoRelease update = obs_data_create();
-	obs_data_set_string(update, "update-type", updateType);
+	uint64_t streamTime = getStreamingTime();
+	uint64_t recordingTime = getRecordingTime();
+	RpcEvent event(QString(updateType), streamTime, recordingTime, additionalFields);
 
-	if (obs_frontend_streaming_active()) {
-		QString streamingTimecode = getStreamingTimecode();
-		obs_data_set_string(update, "stream-timecode", streamingTimecode.toUtf8().constData());
-	}
-
-	if (obs_frontend_recording_active()) {
-		QString recordingTimecode = getRecordingTimecode();
-		obs_data_set_string(update, "rec-timecode", recordingTimecode.toUtf8().constData());
-	}
-
-	if (additionalFields)
-		obs_data_apply(update, additionalFields);
-
-	QString json = obs_data_get_json(update);
-	_srv->broadcast(json.toStdString());
-
-	if (GetConfig()->DebugEnabled) {
-		blog(LOG_INFO, "Update << '%s'", json.toUtf8().constData());
-	}
+	_srv->broadcast(event);
 }
 
 void WSEvents::connectSourceSignals(obs_source_t* source) {
@@ -304,6 +275,8 @@ void WSEvents::connectSourceSignals(obs_source_t* source) {
 		signal_handler_connect(sh, "item_remove", OnSceneItemDelete, this);
 		signal_handler_connect(sh,
 			"item_visible", OnSceneItemVisibilityChanged, this);
+		signal_handler_connect(sh,
+			"item_locked", OnSceneItemLockChanged, this);
 		signal_handler_connect(sh, "item_transform", OnSceneItemTransform, this);
 		signal_handler_connect(sh, "item_select", OnSceneItemSelected, this);
 		signal_handler_connect(sh, "item_deselect", OnSceneItemDeselected, this);
@@ -333,14 +306,38 @@ void WSEvents::disconnectSourceSignals(obs_source_t* source) {
 	signal_handler_disconnect(sh, "item_remove", OnSceneItemDelete, this);
 	signal_handler_disconnect(sh,
 		"item_visible", OnSceneItemVisibilityChanged, this);
+	signal_handler_disconnect(sh,
+		"item_locked", OnSceneItemLockChanged, this);
 	signal_handler_disconnect(sh, "item_transform", OnSceneItemTransform, this);
 	signal_handler_disconnect(sh, "item_select", OnSceneItemSelected, this);
 	signal_handler_disconnect(sh, "item_deselect", OnSceneItemDeselected, this);
 
 	signal_handler_disconnect(sh, "transition_start", OnTransitionBegin, this);
+	signal_handler_disconnect(sh, "transition_stop", OnTransitionEnd, this);
+	signal_handler_disconnect(sh, "transition_video_stop", OnTransitionVideoEnd, this);
 }
 
-void WSEvents::hookTransitionBeginEvent() {
+void WSEvents::connectFilterSignals(obs_source_t* filter) {
+	if (!filter) {
+		return;
+	}
+
+	signal_handler_t* sh = obs_source_get_signal_handler(filter);
+
+	signal_handler_connect(sh, "enable", OnSourceFilterVisibilityChanged, this);
+}
+
+void WSEvents::disconnectFilterSignals(obs_source_t* filter) {
+	if (!filter) {
+		return;
+	}
+
+	signal_handler_t* sh = obs_source_get_signal_handler(filter);
+
+	signal_handler_disconnect(sh, "enable", OnSourceFilterVisibilityChanged, this);
+}
+
+void WSEvents::hookTransitionPlaybackEvents() {
 	obs_frontend_source_list transitions = {};
 	obs_frontend_get_transitions(&transitions);
 
@@ -349,12 +346,16 @@ void WSEvents::hookTransitionBeginEvent() {
 		signal_handler_t* sh = obs_source_get_signal_handler(transition);
 		signal_handler_disconnect(sh, "transition_start", OnTransitionBegin, this);
 		signal_handler_connect(sh, "transition_start", OnTransitionBegin, this);
+		signal_handler_disconnect(sh, "transition_stop", OnTransitionEnd, this);
+		signal_handler_connect(sh, "transition_stop", OnTransitionEnd, this);
+		signal_handler_disconnect(sh, "transition_video_stop", OnTransitionVideoEnd, this);
+		signal_handler_connect(sh, "transition_video_stop", OnTransitionVideoEnd, this);
 	}
 
 	obs_frontend_source_list_free(&transitions);
 }
 
-void WSEvents::unhookTransitionBeginEvent() {
+void WSEvents::unhookTransitionPlaybackEvents() {
 	obs_frontend_source_list transitions = {};
 	obs_frontend_get_transitions(&transitions);
 
@@ -362,6 +363,8 @@ void WSEvents::unhookTransitionBeginEvent() {
 		obs_source_t* transition = transitions.sources.array[i];
 		signal_handler_t* sh = obs_source_get_signal_handler(transition);
 		signal_handler_disconnect(sh, "transition_start", OnTransitionBegin, this);
+		signal_handler_disconnect(sh, "transition_stop", OnTransitionEnd, this);
+		signal_handler_disconnect(sh, "transition_video_stop", OnTransitionVideoEnd, this);
 	}
 
 	obs_frontend_source_list_free(&transitions);
@@ -390,11 +393,11 @@ uint64_t WSEvents::getRecordingTime() {
 }
 
 QString WSEvents::getStreamingTimecode() {
-	return nsToTimestamp(getStreamingTime());
+	return Utils::nsToTimestamp(getStreamingTime());
 }
 
 QString WSEvents::getRecordingTimecode() {
-	return nsToTimestamp(getRecordingTime());
+	return Utils::nsToTimestamp(getRecordingTime());
 }
 
  /**
@@ -744,7 +747,7 @@ void WSEvents::OnExit() {
 void WSEvents::StreamStatus() {
 	bool streamingActive = obs_frontend_streaming_active();
 	bool recordingActive = obs_frontend_recording_active();
-	bool recordingPaused = Utils::RecordingPaused();
+	bool recordingPaused = obs_frontend_recording_paused();
 	bool replayBufferActive = obs_frontend_replay_buffer_active();
 
 	OBSOutputAutoRelease streamOutput = obs_frontend_get_streaming_output();
@@ -828,7 +831,7 @@ void WSEvents::Heartbeat() {
 
 	bool streamingActive = obs_frontend_streaming_active();
 	bool recordingActive = obs_frontend_recording_active();
-	bool recordingPaused = Utils::RecordingPaused();
+	bool recordingPaused = obs_frontend_recording_paused();
 
 	OBSDataAutoRelease data = obs_data_create();
 	OBSOutputAutoRelease recordOutput = obs_frontend_get_recording_output();
@@ -837,7 +840,9 @@ void WSEvents::Heartbeat() {
 	pulse = !pulse;
 	obs_data_set_bool(data, "pulse", pulse);
 
-	obs_data_set_string(data, "current-profile", obs_frontend_get_current_profile());
+	char* currentProfile = obs_frontend_get_current_profile();
+	obs_data_set_string(data, "current-profile", currentProfile);
+	bfree(currentProfile);
 
 	OBSSourceAutoRelease currentScene = obs_frontend_get_current_scene();
 	obs_data_set_string(data, "current-scene", obs_source_get_name(currentScene));
@@ -884,7 +889,10 @@ void WSEvents::TransitionDurationChanged(int ms) {
  * A transition (other than "cut") has begun.
  *
  * @return {String} `name` Transition name.
- * @return {int} `duration` Transition duration (in milliseconds).
+ * @return {String} `type` Transition type.
+ * @return {int} `duration` Transition duration (in milliseconds). 
+ * Will be -1 for any transition with a fixed duration, 
+ * such as a Stinger, due to limitations of the OBS API.
  * @return {String} `from-scene` Source scene of the transition
  * @return {String} `to-scene` Destination scene of the transition
  *
@@ -901,26 +909,60 @@ void WSEvents::OnTransitionBegin(void* param, calldata_t* data) {
 		return;
 	}
 
-	int duration = Utils::GetTransitionDuration(transition);
-	if (duration < 0) {
-		blog(LOG_WARNING, "OnTransitionBegin: duration is negative !");
-	}
-
-	OBSDataAutoRelease fields = obs_data_create();
-	obs_data_set_string(fields, "name", obs_source_get_name(transition));
-	obs_data_set_int(fields, "duration", duration);
-
-	OBSSourceAutoRelease sourceScene = obs_transition_get_source(transition, OBS_TRANSITION_SOURCE_A);
-	if (sourceScene) {
-		obs_data_set_string(fields, "from-scene", obs_source_get_name(sourceScene));
-	}
-
-	OBSSourceAutoRelease destinationScene = obs_transition_get_active_source(transition);
-	if (destinationScene) {
-		obs_data_set_string(fields, "to-scene", obs_source_get_name(destinationScene));
-	}
-
+	OBSDataAutoRelease fields = Utils::GetTransitionData(transition);
 	instance->broadcastUpdate("TransitionBegin", fields);
+}
+
+/**
+* A transition (other than "cut") has ended.
+* Please note that the `from-scene` field is not available in TransitionEnd.
+*
+* @return {String} `name` Transition name.
+* @return {String} `type` Transition type.
+* @return {int} `duration` Transition duration (in milliseconds).
+* @return {String} `to-scene` Destination scene of the transition
+*
+* @api events
+* @name TransitionEnd
+* @category transitions
+* @since 4.8.0
+*/
+void WSEvents::OnTransitionEnd(void* param, calldata_t* data) {
+	auto instance = reinterpret_cast<WSEvents*>(param);
+
+	OBSSource transition = calldata_get_pointer<obs_source_t>(data, "source");
+	if (!transition) {
+		return;
+	}
+
+	OBSDataAutoRelease fields = Utils::GetTransitionData(transition);
+	instance->broadcastUpdate("TransitionEnd", fields);
+}
+
+/**
+* A stinger transition has finished playing its video.
+*
+* @return {String} `name` Transition name.
+* @return {String} `type` Transition type.
+* @return {int} `duration` Transition duration (in milliseconds).
+* @return {String} `from-scene` Source scene of the transition
+* @return {String} `to-scene` Destination scene of the transition
+*
+* @api events
+* @name TransitionVideoEnd
+* @category transitions
+* @since 4.8.0
+*/
+void WSEvents::OnTransitionVideoEnd(void* param, calldata_t* data) {
+	auto instance = reinterpret_cast<WSEvents*>(param);
+
+	OBSSource transition = calldata_get_pointer<obs_source_t>(data, "source");
+	if (!transition) {
+		return;
+	}
+
+	OBSDataAutoRelease fields = Utils::GetTransitionData(transition);
+	instance->broadcastUpdate("TransitionVideoEnd", fields);
 }
 
 /**
@@ -1180,6 +1222,8 @@ void WSEvents::OnSourceFilterAdded(void* param, calldata_t* data) {
 	if (!filter) {
 		return;
 	}
+	
+	self->connectFilterSignals(filter);
 
 	OBSDataAutoRelease filterSettings = obs_source_get_settings(filter);
 
@@ -1212,12 +1256,47 @@ void WSEvents::OnSourceFilterRemoved(void* param, calldata_t* data) {
 	}
 
 	obs_source_t* filter = calldata_get_pointer<obs_source_t>(data, "filter");
+	if (!filter) {
+		return;
+	}
+
+	self->disconnectFilterSignals(filter);
 
 	OBSDataAutoRelease fields = obs_data_create();
 	obs_data_set_string(fields, "sourceName", obs_source_get_name(source));
 	obs_data_set_string(fields, "filterName", obs_source_get_name(filter));
 	obs_data_set_string(fields, "filterType", obs_source_get_id(filter));
 	self->broadcastUpdate("SourceFilterRemoved", fields);
+}
+
+/**
+ * The visibility/enabled state of a filter changed
+ *
+ * @return {String} `sourceName` Source name
+ * @return {String} `filterName` Filter name
+ * @return {Boolean} `filterEnabled` New filter state
+ *
+ * @api events
+ * @name SourceFilterVisibilityChanged
+ * @category sources
+ * @since 4.7.0
+ */
+void WSEvents::OnSourceFilterVisibilityChanged(void* param, calldata_t* data) {
+	auto self = reinterpret_cast<WSEvents*>(param);
+
+	OBSSource source = calldata_get_pointer<obs_source_t>(data, "source");
+	if (!source) {
+		return;
+	}
+
+	OBSSource parent = obs_filter_get_parent(source);
+
+	OBSDataAutoRelease fields = obs_data_create();
+	obs_data_set_string(fields, "sourceName", obs_source_get_name(parent));
+	obs_data_set_string(fields, "filterName", obs_source_get_name(source));
+	obs_data_set_bool(fields, "filterEnabled", obs_source_enabled(source));
+
+	self->broadcastUpdate("SourceFilterVisibilityChanged", fields);
 }
 
 /**
@@ -1394,6 +1473,44 @@ void WSEvents::OnSceneItemVisibilityChanged(void* param, calldata_t* data) {
 	obs_data_set_int(fields, "item-id", obs_sceneitem_get_id(sceneItem));
 	obs_data_set_bool(fields, "item-visible", visible);
 	instance->broadcastUpdate("SceneItemVisibilityChanged", fields);
+}
+
+/**
+ * An item's locked status has been toggled.
+ *
+ * @return {String} `scene-name` Name of the scene.
+ * @return {String} `item-name` Name of the item in the scene.
+ * @return {int} `item-id` Scene item ID
+ * @return {boolean} `item-locked` New locked state of the item.
+ *
+ * @api events
+ * @name SceneItemLockChanged
+ * @category sources
+ * @since unreleased
+ */
+void WSEvents::OnSceneItemLockChanged(void* param, calldata_t* data) {
+	auto instance = reinterpret_cast<WSEvents*>(param);
+
+	obs_scene_t* scene = nullptr;
+	calldata_get_ptr(data, "scene", &scene);
+
+	obs_sceneitem_t* sceneItem = nullptr;
+	calldata_get_ptr(data, "item", &sceneItem);
+
+	bool locked = false;
+	calldata_get_bool(data, "locked", &locked);
+
+	const char* sceneName =
+		obs_source_get_name(obs_scene_get_source(scene));
+	const char* sceneItemName =
+		obs_source_get_name(obs_sceneitem_get_source(sceneItem));
+
+	OBSDataAutoRelease fields = obs_data_create();
+	obs_data_set_string(fields, "scene-name", sceneName);
+	obs_data_set_string(fields, "item-name", sceneItemName);
+	obs_data_set_int(fields, "item-id", obs_sceneitem_get_id(sceneItem));
+	obs_data_set_bool(fields, "item-locked", locked);
+	instance->broadcastUpdate("SceneItemLockChanged", fields);
 }
 
 /**
