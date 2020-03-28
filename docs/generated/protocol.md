@@ -1,6 +1,6 @@
 <!-- This file was generated based on handlebars templates. Do not edit directly! -->
 
-# obs-websocket 4.5.0 protocol reference
+# obs-websocket 4.7.0 protocol reference
 
 # General Introduction
 Messages are exchanged between the client and the server as JSON objects.
@@ -43,8 +43,11 @@ auth_response = base64_encode(auth_response_hash)
 <!-- toc -->
 
 - [Typedefs](#typedefs)
+  * [SceneItem](#sceneitem)
+  * [SceneItemTransform](#sceneitemtransform)
+  * [OBSStats](#obsstats)
+  * [Output](#output)
   * [Scene](#scene)
-  * [Source](#source)
 - [Events](#events)
   * [Scenes](#scenes)
     + [SwitchScenes](#switchscenes)
@@ -56,6 +59,8 @@ auth_response = base64_encode(auth_response_hash)
     + [TransitionListChanged](#transitionlistchanged)
     + [TransitionDurationChanged](#transitiondurationchanged)
     + [TransitionBegin](#transitionbegin)
+    + [TransitionEnd](#transitionend)
+    + [TransitionVideoEnd](#transitionvideoend)
   * [Profiles](#profiles)
     + [ProfileChanged](#profilechanged)
     + [ProfileListChanged](#profilelistchanged)
@@ -70,6 +75,8 @@ auth_response = base64_encode(auth_response_hash)
     + [RecordingStarted](#recordingstarted)
     + [RecordingStopping](#recordingstopping)
     + [RecordingStopped](#recordingstopped)
+    + [RecordingPaused](#recordingpaused)
+    + [RecordingResumed](#recordingresumed)
   * [Replay Buffer](#replay-buffer)
     + [ReplayStarting](#replaystarting)
     + [ReplayStarted](#replaystarted)
@@ -79,11 +86,27 @@ auth_response = base64_encode(auth_response_hash)
     + [Exiting](#exiting)
   * [General](#general)
     + [Heartbeat](#heartbeat)
+    + [BroadcastCustomMessage](#broadcastcustommessage)
   * [Sources](#sources)
+    + [SourceCreated](#sourcecreated)
+    + [SourceDestroyed](#sourcedestroyed)
+    + [SourceVolumeChanged](#sourcevolumechanged)
+    + [SourceMuteStateChanged](#sourcemutestatechanged)
+    + [SourceAudioSyncOffsetChanged](#sourceaudiosyncoffsetchanged)
+    + [SourceAudioMixersChanged](#sourceaudiomixerschanged)
+    + [SourceRenamed](#sourcerenamed)
+    + [SourceFilterAdded](#sourcefilteradded)
+    + [SourceFilterRemoved](#sourcefilterremoved)
+    + [SourceFilterVisibilityChanged](#sourcefiltervisibilitychanged)
+    + [SourceFiltersReordered](#sourcefiltersreordered)
     + [SourceOrderChanged](#sourceorderchanged)
     + [SceneItemAdded](#sceneitemadded)
     + [SceneItemRemoved](#sceneitemremoved)
     + [SceneItemVisibilityChanged](#sceneitemvisibilitychanged)
+    + [SceneItemLockChanged](#sceneitemlockchanged)
+    + [SceneItemTransformChanged](#sceneitemtransformchanged)
+    + [SceneItemSelected](#sceneitemselected)
+    + [SceneItemDeselected](#sceneitemdeselected)
   * [Studio Mode](#studio-mode)
     + [PreviewSceneChanged](#previewscenechanged)
     + [StudioModeSwitched](#studiomodeswitched)
@@ -95,6 +118,15 @@ auth_response = base64_encode(auth_response_hash)
     + [SetHeartbeat](#setheartbeat)
     + [SetFilenameFormatting](#setfilenameformatting)
     + [GetFilenameFormatting](#getfilenameformatting)
+    + [GetStats](#getstats)
+    + [BroadcastCustomMessage](#broadcastcustommessage-1)
+    + [GetVideoInfo](#getvideoinfo)
+    + [OpenProjector](#openprojector)
+  * [Outputs](#outputs)
+    + [ListOutputs](#listoutputs)
+    + [GetOutputInfo](#getoutputinfo)
+    + [StartOutput](#startoutput)
+    + [StopOutput](#stopoutput)
   * [Profiles](#profiles-1)
     + [SetCurrentProfile](#setcurrentprofile)
     + [GetCurrentProfile](#getcurrentprofile)
@@ -103,6 +135,8 @@ auth_response = base64_encode(auth_response_hash)
     + [StartStopRecording](#startstoprecording)
     + [StartRecording](#startrecording)
     + [StopRecording](#stoprecording)
+    + [PauseRecording](#pauserecording)
+    + [ResumeRecording](#resumerecording)
     + [SetRecordingFolder](#setrecordingfolder)
     + [GetRecordingFolder](#getrecordingfolder)
   * [Replay Buffer](#replay-buffer-1)
@@ -131,7 +165,7 @@ auth_response = base64_encode(auth_response_hash)
     + [ReorderSceneItems](#reordersceneitems)
   * [Sources](#sources-1)
     + [GetSourcesList](#getsourceslist)
-    + [GetSourcesTypesList](#getsourcestypeslist)
+    + [GetSourceTypesList](#getsourcetypeslist)
     + [GetVolume](#getvolume)
     + [SetVolume](#setvolume)
     + [GetMute](#getmute)
@@ -149,11 +183,14 @@ auth_response = base64_encode(auth_response_hash)
     + [SetBrowserSourceProperties](#setbrowsersourceproperties)
     + [GetSpecialSources](#getspecialsources)
     + [GetSourceFilters](#getsourcefilters)
+    + [GetSourceFilterInfo](#getsourcefilterinfo)
     + [AddFilterToSource](#addfiltertosource)
     + [RemoveFilterFromSource](#removefilterfromsource)
     + [ReorderSourceFilter](#reordersourcefilter)
     + [MoveSourceFilter](#movesourcefilter)
     + [SetSourceFilterSettings](#setsourcefiltersettings)
+    + [SetSourceFilterVisibility](#setsourcefiltervisibility)
+    + [TakeSourceScreenshot](#takesourcescreenshot)
   * [Streaming](#streaming-1)
     + [GetStreamingStatus](#getstreamingstatus)
     + [StartStopStreaming](#startstopstreaming)
@@ -162,6 +199,7 @@ auth_response = base64_encode(auth_response_hash)
     + [SetStreamSettings](#setstreamsettings)
     + [GetStreamSettings](#getstreamsettings)
     + [SaveStreamSettings](#savestreamsettings)
+    + [SendCaptions](#sendcaptions)
   * [Studio Mode](#studio-mode-1)
     + [GetStudioModeStatus](#getstudiomodestatus)
     + [GetPreviewScene](#getpreviewscene)
@@ -183,24 +221,88 @@ auth_response = base64_encode(auth_response_hash)
 These are complex types, such as `Source` and `Scene`, which are used as arguments or return values in multiple requests and/or events. 
 
 
-## Scene
-| Name | Type  | Description |
-| ---- | :---: | ------------|
-| `name` | _String_ | Name of the currently active scene. |
-| `sources` | _Array&lt;Source&gt;_ | Ordered list of the current scene's source items. |
-## Source
+## SceneItem
 | Name | Type  | Description |
 | ---- | :---: | ------------|
 | `cy` | _Number_ |  |
 | `cx` | _Number_ |  |
+| `alignment` | _Number_ | The point on the source that the item is manipulated from. The sum of 1=Left or 2=Right, and 4=Top or 8=Bottom, or omit to center on that axis. |
 | `name` | _String_ | The name of this Scene Item. |
+| `id` | _int_ | Scene item ID |
 | `render` | _Boolean_ | Whether or not this Scene Item is set to "visible". |
+| `muted` | _Boolean_ | Whether or not this Scene Item is muted. |
+| `locked` | _Boolean_ | Whether or not this Scene Item is locked and can't be moved around |
 | `source_cx` | _Number_ |  |
 | `source_cy` | _Number_ |  |
 | `type` | _String_ | Source type. Value is one of the following: "input", "filter", "transition", "scene" or "unknown" |
 | `volume` | _Number_ |  |
 | `x` | _Number_ |  |
 | `y` | _Number_ |  |
+| `parentGroupName` | _String (optional)_ | Name of the item's parent (if this item belongs to a group) |
+| `groupChildren` | _Array&lt;SceneItem&gt; (optional)_ | List of children (if this item is a group) |
+## SceneItemTransform
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `position.x` | _int_ | The x position of the scene item from the left. |
+| `position.y` | _int_ | The y position of the scene item from the top. |
+| `position.alignment` | _int_ | The point on the scene item that the item is manipulated from. |
+| `rotation` | _double_ | The clockwise rotation of the scene item in degrees around the point of alignment. |
+| `scale.x` | _double_ | The x-scale factor of the scene item. |
+| `scale.y` | _double_ | The y-scale factor of the scene item. |
+| `crop.top` | _int_ | The number of pixels cropped off the top of the scene item before scaling. |
+| `crop.right` | _int_ | The number of pixels cropped off the right of the scene item before scaling. |
+| `crop.bottom` | _int_ | The number of pixels cropped off the bottom of the scene item before scaling. |
+| `crop.left` | _int_ | The number of pixels cropped off the left of the scene item before scaling. |
+| `visible` | _bool_ | If the scene item is visible. |
+| `locked` | _bool_ | If the scene item is locked in position. |
+| `bounds.type` | _String_ | Type of bounding box. Can be "OBS_BOUNDS_STRETCH", "OBS_BOUNDS_SCALE_INNER", "OBS_BOUNDS_SCALE_OUTER", "OBS_BOUNDS_SCALE_TO_WIDTH", "OBS_BOUNDS_SCALE_TO_HEIGHT", "OBS_BOUNDS_MAX_ONLY" or "OBS_BOUNDS_NONE". |
+| `bounds.alignment` | _int_ | Alignment of the bounding box. |
+| `bounds.x` | _double_ | Width of the bounding box. |
+| `bounds.y` | _double_ | Height of the bounding box. |
+| `sourceWidth` | _int_ | Base width (without scaling) of the source |
+| `sourceHeight` | _int_ | Base source (without scaling) of the source |
+| `width` | _double_ | Scene item width (base source width multiplied by the horizontal scaling factor) |
+| `height` | _double_ | Scene item height (base source height multiplied by the vertical scaling factor) |
+| `parentGroupName` | _String (optional)_ | Name of the item's parent (if this item belongs to a group) |
+| `groupChildren` | _Array&lt;SceneItemTransform&gt; (optional)_ | List of children (if this item is a group) |
+## OBSStats
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `fps` | _double_ | Current framerate. |
+| `render-total-frames` | _int_ | Number of frames rendered |
+| `render-missed-frames` | _int_ | Number of frames missed due to rendering lag |
+| `output-total-frames` | _int_ | Number of frames outputted |
+| `output-skipped-frames` | _int_ | Number of frames skipped due to encoding lag |
+| `average-frame-time` | _double_ | Average frame render time (in milliseconds) |
+| `cpu-usage` | _double_ | Current CPU usage (percentage) |
+| `memory-usage` | _double_ | Current RAM usage (in megabytes) |
+| `free-disk-space` | _double_ | Free recording disk space (in megabytes) |
+## Output
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `name` | _String_ | Output name |
+| `type` | _String_ | Output type/kind |
+| `width` | _int_ | Video output width |
+| `height` | _int_ | Video output height |
+| `flags` | _Object_ | Output flags |
+| `flags.rawValue` | _int_ | Raw flags value |
+| `flags.audio` | _boolean_ | Output uses audio |
+| `flags.video` | _boolean_ | Output uses video |
+| `flags.encoded` | _boolean_ | Output is encoded |
+| `flags.multiTrack` | _boolean_ | Output uses several audio tracks |
+| `flags.service` | _boolean_ | Output uses a service |
+| `settings` | _Object_ | Output name |
+| `active` | _boolean_ | Output status (active or not) |
+| `reconnecting` | _boolean_ | Output reconnection status (reconnecting or not) |
+| `congestion` | _double_ | Output congestion |
+| `totalFrames` | _int_ | Number of frames sent |
+| `droppedFrames` | _int_ | Number of frames dropped |
+| `totalBytes` | _int_ | Total bytes sent |
+## Scene
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `name` | _String_ | Name of the currently active scene. |
+| `sources` | _Array&lt;SceneItem&gt;_ | Ordered list of the current scene's source items. |
 
 
 
@@ -231,7 +333,7 @@ Indicates a scene change.
 | Name | Type  | Description |
 | ---- | :---: | ------------|
 | `scene-name` | _String_ | The new scene. |
-| `sources` | _Array&lt;Source&gt;_ | List of sources in the new scene. Same specification as [`GetCurrentScene`](#getcurrentscene). |
+| `sources` | _Array&lt;SceneItem&gt;_ | List of scene items in the new scene. Same specification as [`GetCurrentScene`](#getcurrentscene). |
 
 
 ---
@@ -336,6 +438,47 @@ A transition (other than "cut") has begun.
 | Name | Type  | Description |
 | ---- | :---: | ------------|
 | `name` | _String_ | Transition name. |
+| `type` | _String_ | Transition type. |
+| `duration` | _int_ | Transition duration (in milliseconds). Will be -1 for any transition with a fixed duration, such as a Stinger, due to limitations of the OBS API. |
+| `from-scene` | _String_ | Source scene of the transition |
+| `to-scene` | _String_ | Destination scene of the transition |
+
+
+---
+
+### TransitionEnd
+
+
+- Added in v4.8.0
+
+A transition (other than "cut") has ended.
+Please note that the `from-scene` field is not available in TransitionEnd.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `name` | _String_ | Transition name. |
+| `type` | _String_ | Transition type. |
+| `duration` | _int_ | Transition duration (in milliseconds). |
+| `to-scene` | _String_ | Destination scene of the transition |
+
+
+---
+
+### TransitionVideoEnd
+
+
+- Added in v4.8.0
+
+A stinger transition has finished playing its video.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `name` | _String_ | Transition name. |
+| `type` | _String_ | Transition type. |
 | `duration` | _int_ | Transition duration (in milliseconds). |
 | `from-scene` | _String_ | Source scene of the transition |
 | `to-scene` | _String_ | Destination scene of the transition |
@@ -444,7 +587,7 @@ Emit every 2 seconds.
 | ---- | :---: | ------------|
 | `streaming` | _boolean_ | Current streaming state. |
 | `recording` | _boolean_ | Current recording state. |
-| `preview-only` | _boolean_ | Always false (retrocompatibility). |
+| `replay-buffer-active` | _boolean_ | Replay Buffer status |
 | `bytes-per-sec` | _int_ | Amount of data per second (in bytes) transmitted by the stream encoder. |
 | `kbits-per-sec` | _int_ | Amount of data per second (in kilobits) transmitted by the stream encoder. |
 | `strain` | _double_ | Percentage of dropped frames. |
@@ -452,6 +595,15 @@ Emit every 2 seconds.
 | `num-total-frames` | _int_ | Total number of frames transmitted since the stream started. |
 | `num-dropped-frames` | _int_ | Number of frames dropped by the encoder since the stream started. |
 | `fps` | _double_ | Current framerate. |
+| `render-total-frames` | _int_ | Number of frames rendered |
+| `render-missed-frames` | _int_ | Number of frames missed due to rendering lag |
+| `output-total-frames` | _int_ | Number of frames outputted |
+| `output-skipped-frames` | _int_ | Number of frames skipped due to encoding lag |
+| `average-frame-time` | _double_ | Average frame time (in milliseconds) |
+| `cpu-usage` | _double_ | Current CPU usage (percentage) |
+| `memory-usage` | _double_ | Current RAM usage (in megabytes) |
+| `free-disk-space` | _double_ | Free recording disk space (in megabytes) |
+| `preview-only` | _boolean_ | Always false (retrocompatibility). |
 
 
 ---
@@ -503,6 +655,32 @@ _No additional response items._
 - Added in v0.3
 
 Recording stopped successfully.
+
+**Response Items:**
+
+_No additional response items._
+
+---
+
+### RecordingPaused
+
+
+- Added in v4.7.0
+
+Current recording paused
+
+**Response Items:**
+
+_No additional response items._
+
+---
+
+### RecordingResumed
+
+
+- Added in v4.7.0
+
+Current recording resumed
 
 **Response Items:**
 
@@ -603,11 +781,228 @@ Emitted every 2 seconds after enabling it by calling SetHeartbeat.
 | `total-record-time` | _int (optional)_ | Total time (in seconds) since recording started. |
 | `total-record-bytes` | _int (optional)_ | Total bytes recorded since the recording started. |
 | `total-record-frames` | _int (optional)_ | Total frames recorded since the recording started. |
+| `stats` | _OBSStats_ | OBS Stats |
+
+
+---
+
+### BroadcastCustomMessage
+
+
+- Added in v4.7.0
+
+A custom broadcast message was received
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `realm` | _String_ | Identifier provided by the sender |
+| `data` | _Object_ | User-defined data |
 
 
 ---
 
 ## Sources
+
+### SourceCreated
+
+
+- Added in v4.6.0
+
+A source has been created. A source can be an input, a scene or a transition.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `sourceType` | _String_ | Source type. Can be "input", "scene", "transition" or "filter". |
+| `sourceKind` | _String_ | Source kind. |
+| `sourceSettings` | _Object_ | Source settings |
+
+
+---
+
+### SourceDestroyed
+
+
+- Added in v4.6.0
+
+A source has been destroyed/removed. A source can be an input, a scene or a transition.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `sourceType` | _String_ | Source type. Can be "input", "scene", "transition" or "filter". |
+| `sourceKind` | _String_ | Source kind. |
+
+
+---
+
+### SourceVolumeChanged
+
+
+- Added in v4.6.0
+
+The volume of a source has changed.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `volume` | _float_ | Source volume |
+
+
+---
+
+### SourceMuteStateChanged
+
+
+- Added in v4.6.0
+
+A source has been muted or unmuted.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `muted` | _boolean_ | Mute status of the source |
+
+
+---
+
+### SourceAudioSyncOffsetChanged
+
+
+- Added in v4.6.0
+
+The audio sync offset of a source has changed.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `syncOffset` | _int_ | Audio sync offset of the source (in nanoseconds) |
+
+
+---
+
+### SourceAudioMixersChanged
+
+
+- Added in v4.6.0
+
+Audio mixer routing changed on a source.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `mixers` | _Array&lt;Object&gt;_ | Routing status of the source for each audio mixer (array of 6 values) |
+| `mixers.*.id` | _int_ | Mixer number |
+| `mixers.*.enabled` | _boolean_ | Routing status |
+| `hexMixersValue` | _String_ | Raw mixer flags (little-endian, one bit per mixer) as an hexadecimal value |
+
+
+---
+
+### SourceRenamed
+
+
+- Added in v4.6.0
+
+A source has been renamed.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `previousName` | _String_ | Previous source name |
+| `newName` | _String_ | New source name |
+
+
+---
+
+### SourceFilterAdded
+
+
+- Added in v4.6.0
+
+A filter was added to a source.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `filterName` | _String_ | Filter name |
+| `filterType` | _String_ | Filter type |
+| `filterSettings` | _Object_ | Filter settings |
+
+
+---
+
+### SourceFilterRemoved
+
+
+- Added in v4.6.0
+
+A filter was removed from a source.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `filterName` | _String_ | Filter name |
+| `filterType` | _String_ | Filter type |
+
+
+---
+
+### SourceFilterVisibilityChanged
+
+
+- Added in v4.7.0
+
+The visibility/enabled state of a filter changed
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `filterName` | _String_ | Filter name |
+| `filterEnabled` | _Boolean_ | New filter state |
+
+
+---
+
+### SourceFiltersReordered
+
+
+- Added in v4.6.0
+
+Filters in a source have been reordered.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `filters` | _Array&lt;Object&gt;_ | Ordered Filters list |
+| `filters.*.name` | _String_ | Filter name |
+| `filters.*.type` | _String_ | Filter type |
+
+
+---
 
 ### SourceOrderChanged
 
@@ -621,6 +1016,9 @@ Scene items have been reordered.
 | Name | Type  | Description |
 | ---- | :---: | ------------|
 | `scene-name` | _String_ | Name of the scene where items have been reordered. |
+| `scene-items` | _Array&lt;Object&gt;_ | Ordered list of scene items |
+| `scene-items.*.source-name` | _String_ | Item source name |
+| `scene-items.*.item-id` | _int_ | Scene item unique ID |
 
 
 ---
@@ -638,6 +1036,7 @@ An item has been added to the current scene.
 | ---- | :---: | ------------|
 | `scene-name` | _String_ | Name of the scene. |
 | `item-name` | _String_ | Name of the item added to the scene. |
+| `item-id` | _int_ | Scene item ID |
 
 
 ---
@@ -655,6 +1054,7 @@ An item has been removed from the current scene.
 | ---- | :---: | ------------|
 | `scene-name` | _String_ | Name of the scene. |
 | `item-name` | _String_ | Name of the item removed from the scene. |
+| `item-id` | _int_ | Scene item ID |
 
 
 ---
@@ -672,7 +1072,82 @@ An item's visibility has been toggled.
 | ---- | :---: | ------------|
 | `scene-name` | _String_ | Name of the scene. |
 | `item-name` | _String_ | Name of the item in the scene. |
+| `item-id` | _int_ | Scene item ID |
 | `item-visible` | _boolean_ | New visibility state of the item. |
+
+
+---
+
+### SceneItemLockChanged
+
+
+- Unreleased
+
+An item's locked status has been toggled.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `scene-name` | _String_ | Name of the scene. |
+| `item-name` | _String_ | Name of the item in the scene. |
+| `item-id` | _int_ | Scene item ID |
+| `item-locked` | _boolean_ | New locked state of the item. |
+
+
+---
+
+### SceneItemTransformChanged
+
+
+- Added in v4.6.0
+
+An item's transform has been changed.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `scene-name` | _String_ | Name of the scene. |
+| `item-name` | _String_ | Name of the item in the scene. |
+| `item-id` | _int_ | Scene item ID |
+| `transform` | _SceneItemTransform_ | Scene item transform properties |
+
+
+---
+
+### SceneItemSelected
+
+
+- Added in v4.6.0
+
+A scene item is selected.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `scene-name` | _String_ | Name of the scene. |
+| `item-name` | _String_ | Name of the item in the scene. |
+| `item-id` | _int_ | Name of the item in the scene. |
+
+
+---
+
+### SceneItemDeselected
+
+
+- Added in v4.6.0
+
+A scene item is deselected.
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `scene-name` | _String_ | Name of the scene. |
+| `item-name` | _String_ | Name of the item in the scene. |
+| `item-id` | _int_ | Name of the item in the scene. |
 
 
 ---
@@ -691,7 +1166,7 @@ The selected preview scene has changed (only available in Studio Mode).
 | Name | Type  | Description |
 | ---- | :---: | ------------|
 | `scene-name` | _String_ | Name of the scene being previewed. |
-| `sources` | _Array&lt;Source&gt;_ | List of sources composing the scene. Same specification as [`GetCurrentScene`](#getcurrentscene). |
+| `sources` | _Array&lt;SceneItem&gt;_ | List of sources composing the scene. Same specification as [`GetCurrentScene`](#getcurrentscene). |
 
 
 ---
@@ -749,6 +1224,7 @@ _No specified parameters._
 | `obs-websocket-version` | _String_ | obs-websocket plugin version. |
 | `obs-studio-version` | _String_ | OBS Studio program version. |
 | `available-requests` | _String_ | List of available request types, formatted as a comma-separated list string (e.g. : "Method1,Method2,Method3"). |
+| `supported-image-export-formats` | _String_ | List of supported formats for features that use image export (like the TakeSourceScreenshot request type) formatted as a comma-separated list string |
 
 
 ---
@@ -853,6 +1329,184 @@ _No specified parameters._
 | ---- | :---: | ------------|
 | `filename-formatting` | _String_ | Current filename formatting string. |
 
+
+---
+
+### GetStats
+
+
+- Added in v4.6.0
+
+Get OBS stats (almost the same info as provided in OBS' stats window)
+
+**Request Fields:**
+
+_No specified parameters._
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `stats` | _OBSStats_ | OBS stats |
+
+
+---
+
+### BroadcastCustomMessage
+
+
+- Added in v4.7.0
+
+Broadcast custom message to all connected WebSocket clients
+
+**Request Fields:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `realm` | _String_ | Identifier to be choosen by the client |
+| `data` | _Object_ | User-defined data |
+
+
+**Response Items:**
+
+_No additional response items._
+
+---
+
+### GetVideoInfo
+
+
+- Added in v4.6.0
+
+Get basic OBS video information
+
+**Request Fields:**
+
+_No specified parameters._
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `baseWidth` | _int_ | Base (canvas) width |
+| `baseHeight` | _int_ | Base (canvas) height |
+| `outputWidth` | _int_ | Output width |
+| `outputHeight` | _int_ | Output height |
+| `scaleType` | _String_ | Scaling method used if output size differs from base size |
+| `fps` | _double_ | Frames rendered per second |
+| `videoFormat` | _String_ | Video color format |
+| `colorSpace` | _String_ | Color space for YUV |
+| `colorRange` | _String_ | Color range (full or partial) |
+
+
+---
+
+### OpenProjector
+
+
+- Unreleased
+
+Open a projector window or create a projector on a monitor. Requires OBS v24.0.4 or newer.
+
+**Request Fields:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `type` | _String (Optional)_ | Type of projector: Preview (default), Source, Scene, StudioProgram, or Multiview (case insensitive). |
+| `monitor` | _int (Optional)_ | Monitor to open the projector on. If -1 or omitted, opens a window. |
+| `geometry` | _String (Optional)_ | Size and position of the projector window (only if monitor is -1). Encoded in Base64 using Qt's geometry encoding (https://doc.qt.io/qt-5/qwidget.html#saveGeometry). Corresponds to OBS's saved projectors. |
+| `name` | _String (Optional)_ | Name of the source or scene to be displayed (ignored for other projector types). |
+
+
+**Response Items:**
+
+_No additional response items._
+
+---
+
+## Outputs
+
+### ListOutputs
+
+
+- Added in v4.7.0
+
+List existing outputs
+
+**Request Fields:**
+
+_No specified parameters._
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `outputs` | _Array&lt;Output&gt;_ | Outputs list |
+
+
+---
+
+### GetOutputInfo
+
+
+- Added in v4.7.0
+
+Get information about a single output
+
+**Request Fields:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `outputName` | _String_ | Output name |
+
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `outputInfo` | _Output_ | Output info |
+
+
+---
+
+### StartOutput
+
+
+- Added in v4.7.0
+
+Start an output
+
+**Request Fields:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `outputName` | _String_ | Output name |
+
+
+**Response Items:**
+
+_No additional response items._
+
+---
+
+### StopOutput
+
+
+- Added in v4.7.0
+
+Stop an output
+
+**Request Fields:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `outputName` | _String_ | Output name |
+| `force` | _boolean (optional)_ | Force stop (default: false) |
+
+
+**Response Items:**
+
+_No additional response items._
 
 ---
 
@@ -973,12 +1627,52 @@ _No additional response items._
 
 ---
 
+### PauseRecording
+
+
+- Added in v4.7.0
+
+Pause the current recording.
+Returns an error if recording is not active or already paused.
+
+**Request Fields:**
+
+_No specified parameters._
+
+**Response Items:**
+
+_No additional response items._
+
+---
+
+### ResumeRecording
+
+
+- Added in v4.7.0
+
+Resume/unpause the current recording (if paused).
+Returns an error if recording is not active or not paused.
+
+**Request Fields:**
+
+_No specified parameters._
+
+**Response Items:**
+
+_No additional response items._
+
+---
+
 ### SetRecordingFolder
 
 
 - Added in v4.1.0
 
-Change the current recording folder.
+
+
+Please note: if `SetRecordingFolder` is called while a recording is
+in progress, the change won't be applied immediately and will be
+effective on the next recording.
 
 **Request Fields:**
 
@@ -1160,6 +1854,7 @@ _No specified parameters._
 - Added in v4.3.0
 
 Gets the scene specific properties of the specified source item.
+Coordinates are relative to the item's parent (the scene or group it belongs to).
 
 **Request Fields:**
 
@@ -1185,10 +1880,19 @@ Gets the scene specific properties of the specified source item.
 | `crop.bottom` | _int_ | The number of pixels cropped off the bottom of the source before scaling. |
 | `crop.left` | _int_ | The number of pixels cropped off the left of the source before scaling. |
 | `visible` | _bool_ | If the source is visible. |
-| `bounds.type` | _String_ | Type of bounding box. |
+| `muted` | _bool_ | If the source is muted. |
+| `locked` | _bool_ | If the source's transform is locked. |
+| `bounds.type` | _String_ | Type of bounding box. Can be "OBS_BOUNDS_STRETCH", "OBS_BOUNDS_SCALE_INNER", "OBS_BOUNDS_SCALE_OUTER", "OBS_BOUNDS_SCALE_TO_WIDTH", "OBS_BOUNDS_SCALE_TO_HEIGHT", "OBS_BOUNDS_MAX_ONLY" or "OBS_BOUNDS_NONE". |
 | `bounds.alignment` | _int_ | Alignment of the bounding box. |
 | `bounds.x` | _double_ | Width of the bounding box. |
 | `bounds.y` | _double_ | Height of the bounding box. |
+| `sourceWidth` | _int_ | Base width (without scaling) of the source |
+| `sourceHeight` | _int_ | Base source (without scaling) of the source |
+| `width` | _double_ | Scene item width (base source width multiplied by the horizontal scaling factor) |
+| `height` | _double_ | Scene item height (base source height multiplied by the vertical scaling factor) |
+| `alignment` | _int_ | The point on the source that the item is manipulated from. The sum of 1=Left or 2=Right, and 4=Top or 8=Bottom, or omit to center on that axis. |
+| `parentGroupName` | _String (optional)_ | Name of the item's parent (if this item belongs to a group) |
+| `groupChildren` | _Array&lt;SceneItemTransform&gt; (optional)_ | List of children (if this item is a group) |
 
 
 ---
@@ -1199,6 +1903,7 @@ Gets the scene specific properties of the specified source item.
 - Added in v4.3.0
 
 Sets the scene specific properties of a source. Unspecified properties will remain unchanged.
+Coordinates are relative to the item's parent (the scene or group it belongs to).
 
 **Request Fields:**
 
@@ -1206,21 +1911,22 @@ Sets the scene specific properties of a source. Unspecified properties will rema
 | ---- | :---: | ------------|
 | `scene-name` | _String (optional)_ | the name of the scene that the source item belongs to. Defaults to the current scene. |
 | `item` | _String_ | The name of the source. |
-| `position.x` | _int_ | The new x position of the source. |
-| `position.y` | _int_ | The new y position of the source. |
-| `position.alignment` | _int_ | The new alignment of the source. |
-| `rotation` | _double_ | The new clockwise rotation of the item in degrees. |
-| `scale.x` | _double_ | The new x scale of the item. |
-| `scale.y` | _double_ | The new y scale of the item. |
-| `crop.top` | _int_ | The new amount of pixels cropped off the top of the source before scaling. |
-| `crop.bottom` | _int_ | The new amount of pixels cropped off the bottom of the source before scaling. |
-| `crop.left` | _int_ | The new amount of pixels cropped off the left of the source before scaling. |
-| `crop.right` | _int_ | The new amount of pixels cropped off the right of the source before scaling. |
-| `visible` | _bool_ | The new visibility of the source. 'true' shows source, 'false' hides source. |
-| `bounds.type` | _String_ | The new bounds type of the source. |
-| `bounds.alignment` | _int_ | The new alignment of the bounding box. (0-2, 4-6, 8-10) |
-| `bounds.x` | _double_ | The new width of the bounding box. |
-| `bounds.y` | _double_ | The new height of the bounding box. |
+| `position.x` | _int (optional)_ | The new x position of the source. |
+| `position.y` | _int (optional)_ | The new y position of the source. |
+| `position.alignment` | _int (optional)_ | The new alignment of the source. |
+| `rotation` | _double (optional)_ | The new clockwise rotation of the item in degrees. |
+| `scale.x` | _double (optional)_ | The new x scale of the item. |
+| `scale.y` | _double (optional)_ | The new y scale of the item. |
+| `crop.top` | _int (optional)_ | The new amount of pixels cropped off the top of the source before scaling. |
+| `crop.bottom` | _int (optional)_ | The new amount of pixels cropped off the bottom of the source before scaling. |
+| `crop.left` | _int (optional)_ | The new amount of pixels cropped off the left of the source before scaling. |
+| `crop.right` | _int (optional)_ | The new amount of pixels cropped off the right of the source before scaling. |
+| `visible` | _bool (optional)_ | The new visibility of the source. 'true' shows source, 'false' hides source. |
+| `locked` | _bool (optional)_ | The new locked status of the source. 'true' keeps it in its current position, 'false' allows movement. |
+| `bounds.type` | _String (optional)_ | The new bounds type of the source. Can be "OBS_BOUNDS_STRETCH", "OBS_BOUNDS_SCALE_INNER", "OBS_BOUNDS_SCALE_OUTER", "OBS_BOUNDS_SCALE_TO_WIDTH", "OBS_BOUNDS_SCALE_TO_HEIGHT", "OBS_BOUNDS_MAX_ONLY" or "OBS_BOUNDS_NONE". |
+| `bounds.alignment` | _int (optional)_ | The new alignment of the bounding box. (0-2, 4-6, 8-10) |
+| `bounds.x` | _double (optional)_ | The new width of the bounding box. |
+| `bounds.y` | _double (optional)_ | The new height of the bounding box. |
 
 
 **Response Items:**
@@ -1395,7 +2101,7 @@ Duplicates a scene item.
 | ---- | :---: | ------------|
 | `scene` | _String_ | Name of the scene where the new item was created |
 | `item` | _Object_ | New item info |
-| `̀item.id` | _int_ | New item ID |
+| `item.id` | _int_ | New item ID |
 | `item.name` | _String_ | New item name |
 
 
@@ -1439,7 +2145,7 @@ _No specified parameters._
 | Name | Type  | Description |
 | ---- | :---: | ------------|
 | `name` | _String_ | Name of the currently active scene. |
-| `sources` | _Array&lt;Source&gt;_ | Ordered list of the current scene's source items. |
+| `sources` | _Array&lt;SceneItem&gt;_ | Ordered list of the current scene's source items. |
 
 
 ---
@@ -1477,7 +2183,7 @@ Changes the order of scene items in the requested scene.
 | Name | Type  | Description |
 | ---- | :---: | ------------|
 | `scene` | _String (optional)_ | Name of the scene to reorder (defaults to current). |
-| `items` | _Scene\|Array_ | Ordered list of objects with name and/or id specified. Id preferred due to uniqueness per scene |
+| `items` | _Array&lt;Scene&gt;_ | Ordered list of objects with name and/or id specified. Id preferred due to uniqueness per scene |
 | `items[].id` | _int (optional)_ | Id of a specific scene item. Unique on a scene by scene basis. |
 | `items[].name` | _String (optional)_ | Name of a scene item. Sufficiently unique if no scene items share sources within the scene. |
 
@@ -1513,7 +2219,7 @@ _No specified parameters._
 
 ---
 
-### GetSourcesTypesList
+### GetSourceTypesList
 
 
 - Added in v4.3.0
@@ -1528,19 +2234,19 @@ _No specified parameters._
 
 | Name | Type  | Description |
 | ---- | :---: | ------------|
-| `ids` | _Array&lt;Object&gt;_ | Array of source types |
-| `ids.*.typeId` | _String_ | Non-unique internal source type ID |
-| `ids.*.displayName` | _String_ | Display name of the source type |
-| `ids.*.type` | _String_ | Type. Value is one of the following: "input", "filter", "transition" or "other" |
-| `ids.*.defaultSettings` | _Object_ | Default settings of this source type |
-| `ids.*.caps` | _Object_ | Source type capabilities |
-| `ids.*.caps.isAsync` | _Boolean_ | True if source of this type provide frames asynchronously |
-| `ids.*.caps.hasVideo` | _Boolean_ | True if sources of this type provide video |
-| `ids.*.caps.hasAudio` | _Boolean_ | True if sources of this type provide audio |
-| `ids.*.caps.canInteract` | _Boolean_ | True if interaction with this sources of this type is possible |
-| `ids.*.caps.isComposite` | _Boolean_ | True if sources of this type composite one or more sub-sources |
-| `ids.*.caps.doNotDuplicate` | _Boolean_ | True if sources of this type should not be fully duplicated |
-| `ids.*.caps.doNotSelfMonitor` | _Boolean_ | True if sources of this type may cause a feedback loop if it's audio is monitored and shouldn't be |
+| `types` | _Array&lt;Object&gt;_ | Array of source types |
+| `types.*.typeId` | _String_ | Non-unique internal source type ID |
+| `types.*.displayName` | _String_ | Display name of the source type |
+| `types.*.type` | _String_ | Type. Value is one of the following: "input", "filter", "transition" or "other" |
+| `types.*.defaultSettings` | _Object_ | Default settings of this source type |
+| `types.*.caps` | _Object_ | Source type capabilities |
+| `types.*.caps.isAsync` | _Boolean_ | True if source of this type provide frames asynchronously |
+| `types.*.caps.hasVideo` | _Boolean_ | True if sources of this type provide video |
+| `types.*.caps.hasAudio` | _Boolean_ | True if sources of this type provide audio |
+| `types.*.caps.canInteract` | _Boolean_ | True if interaction with this sources of this type is possible |
+| `types.*.caps.isComposite` | _Boolean_ | True if sources of this type composite one or more sub-sources |
+| `types.*.caps.doNotDuplicate` | _Boolean_ | True if sources of this type should not be fully duplicated |
+| `types.*.caps.doNotSelfMonitor` | _Boolean_ | True if sources of this type may cause a feedback loop if it's audio is monitored and shouldn't be |
 
 
 ---
@@ -2028,9 +2734,37 @@ List filters applied to a source
 | Name | Type  | Description |
 | ---- | :---: | ------------|
 | `filters` | _Array&lt;Object&gt;_ | List of filters for the specified source |
+| `filters.*.enabled` | _Boolean_ | Filter status (enabled or not) |
 | `filters.*.type` | _String_ | Filter type |
 | `filters.*.name` | _String_ | Filter name |
 | `filters.*.settings` | _Object_ | Filter settings |
+
+
+---
+
+### GetSourceFilterInfo
+
+
+- Added in v4.7.0
+
+List filters applied to a source
+
+**Request Fields:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `filterName` | _String_ | Source filter name |
+
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `enabled` | _Boolean_ | Filter status (enabled or not) |
+| `type` | _String_ | Filter type |
+| `name` | _String_ | Filter name |
+| `settings` | _Object_ | Filter settings |
 
 
 ---
@@ -2145,6 +2879,62 @@ _No additional response items._
 
 ---
 
+### SetSourceFilterVisibility
+
+
+- Added in v4.7.0
+
+Change the visibility/enabled state of a filter
+
+**Request Fields:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `filterName` | _String_ | Source filter name |
+| `filterEnabled` | _Boolean_ | New filter state |
+
+
+**Response Items:**
+
+_No additional response items._
+
+---
+
+### TakeSourceScreenshot
+
+
+- Added in v4.6.0
+
+
+
+At least `embedPictureFormat` or `saveToFilePath` must be specified.
+
+Clients can specify `width` and `height` parameters to receive scaled pictures. Aspect ratio is
+preserved if only one of these two parameters is specified.
+
+**Request Fields:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name. Note that, since scenes are also sources, you can also provide a scene name. |
+| `embedPictureFormat` | _String (optional)_ | Format of the Data URI encoded picture. Can be "png", "jpg", "jpeg" or "bmp" (or any other value supported by Qt's Image module) |
+| `saveToFilePath` | _String (optional)_ | Full file path (file extension included) where the captured image is to be saved. Can be in a format different from `pictureFormat`. Can be a relative path. |
+| `width` | _int (optional)_ | Screenshot width. Defaults to the source's base width. |
+| `height` | _int (optional)_ | Screenshot height. Defaults to the source's base height. |
+
+
+**Response Items:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `sourceName` | _String_ | Source name |
+| `img` | _String_ | Image Data URI (if `embedPictureFormat` was specified in the request) |
+| `imageFile` | _String_ | Absolute path to the saved image file (if `saveToFilePath` was specified in the request) |
+
+
+---
+
 ## Streaming
 
 ### GetStreamingStatus
@@ -2206,9 +2996,9 @@ Will return an `error` if streaming is already active.
 | `stream.settings` | _Object (optional)_ | Settings for the stream. |
 | `stream.settings.server` | _String (optional)_ | The publish URL. |
 | `stream.settings.key` | _String (optional)_ | The publish key of the stream. |
-| `stream.settings.use-auth` | _boolean (optional)_ | Indicates whether authentication should be used when connecting to the streaming server. |
-| `stream.settings.username` | _String (optional)_ | If authentication is enabled, the username for the streaming server. Ignored if `use-auth` is not set to `true`. |
-| `stream.settings.password` | _String (optional)_ | If authentication is enabled, the password for the streaming server. Ignored if `use-auth` is not set to `true`. |
+| `stream.settings.use_auth` | _boolean (optional)_ | Indicates whether authentication should be used when connecting to the streaming server. |
+| `stream.settings.username` | _String (optional)_ | If authentication is enabled, the username for the streaming server. Ignored if `use_auth` is not set to `true`. |
+| `stream.settings.password` | _String (optional)_ | If authentication is enabled, the password for the streaming server. Ignored if `use_auth` is not set to `true`. |
 
 
 **Response Items:**
@@ -2250,7 +3040,7 @@ Sets one or more attributes of the current streaming server settings. Any option
 | `settings` | _Object_ | The actual settings of the stream. |
 | `settings.server` | _String (optional)_ | The publish URL. |
 | `settings.key` | _String (optional)_ | The publish key. |
-| `settings.use-auth` | _boolean (optional)_ | Indicates whether authentication should be used when connecting to the streaming server. |
+| `settings.use_auth` | _boolean (optional)_ | Indicates whether authentication should be used when connecting to the streaming server. |
 | `settings.username` | _String (optional)_ | The username for the streaming service. |
 | `settings.password` | _String (optional)_ | The password for the streaming service. |
 | `save` | _boolean_ | Persist the settings to disk. |
@@ -2281,9 +3071,9 @@ _No specified parameters._
 | `settings` | _Object_ | Stream settings object. |
 | `settings.server` | _String_ | The publish URL. |
 | `settings.key` | _String_ | The publish key of the stream. |
-| `settings.use-auth` | _boolean_ | Indicates whether authentication should be used when connecting to the streaming server. |
-| `settings.username` | _String_ | The username to use when accessing the streaming server. Only present if `use-auth` is `true`. |
-| `settings.password` | _String_ | The password to use when accessing the streaming server. Only present if `use-auth` is `true`. |
+| `settings.use_auth` | _boolean_ | Indicates whether authentication should be used when connecting to the streaming server. |
+| `settings.username` | _String_ | The username to use when accessing the streaming server. Only present if `use_auth` is `true`. |
+| `settings.password` | _String_ | The password to use when accessing the streaming server. Only present if `use_auth` is `true`. |
 
 
 ---
@@ -2298,6 +3088,27 @@ Save the current streaming server settings to disk.
 **Request Fields:**
 
 _No specified parameters._
+
+**Response Items:**
+
+_No additional response items._
+
+---
+
+### SendCaptions
+
+
+- Added in v4.6.0
+
+Send the provided text as embedded CEA-608 caption data.
+As of OBS Studio 23.1, captions are not yet available on Linux.
+
+**Request Fields:**
+
+| Name | Type  | Description |
+| ---- | :---: | ------------|
+| `text` | _String_ | Captions text |
+
 
 **Response Items:**
 
@@ -2344,7 +3155,7 @@ _No specified parameters._
 | Name | Type  | Description |
 | ---- | :---: | ------------|
 | `name` | _String_ | The name of the active preview scene. |
-| `sources` | _Array&lt;Source&gt;_ |  |
+| `sources` | _Array&lt;SceneItem&gt;_ |  |
 
 
 ---

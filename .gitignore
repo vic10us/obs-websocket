@@ -4,9 +4,9 @@
 /build32/
 /build64/
 /release/
+/package/
 /installer/Output/
-
+.idea
 .vscode
-
 test/node_modules/
 test/dist/

@@ -21,57 +21,57 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #include <obs.hpp>
 #include <obs-frontend-api.h>
+#include <util/platform.h>
 
-#include <QListWidgetItem>
-#include <QSharedPointer>
+#include <QtWidgets/QListWidgetItem>
+#include <QtCore/QSharedPointer>
+#include <QtCore/QTimer>
 
 #include "WSServer.h"
-
-class WSEvents;
-typedef QSharedPointer<WSEvents> WSEventsPtr;
 
 class WSEvents : public QObject
 {
 Q_OBJECT
 
 public:
-	static WSEventsPtr Current();
-	static void ResetCurrent(WSServerPtr srv);
-
 	explicit WSEvents(WSServerPtr srv);
 	~WSEvents();
-	static void FrontendEventHandler(
-		enum obs_frontend_event event, void* privateData);
-	void connectSceneSignals(obs_source_t* scene);
 
-	void hookTransitionBeginEvent();
+	void connectSourceSignals(obs_source_t* source);
+	void disconnectSourceSignals(obs_source_t* source);
 
-	uint64_t GetStreamingTime();
-	const char* GetStreamingTimecode();
-	uint64_t GetRecordingTime();
-	const char* GetRecordingTimecode();
+	void connectFilterSignals(obs_source_t* filter);
+	void disconnectFilterSignals(obs_source_t* filter);
+
+	void hookTransitionPlaybackEvents();
+	void unhookTransitionPlaybackEvents();
+
+	uint64_t getStreamingTime();
+	uint64_t getRecordingTime();
+
+	QString getStreamingTimecode();
+	QString getRecordingTimecode();
+	
+	obs_data_t* GetStats();
+
+	void OnBroadcastCustomMessage(QString realm, obs_data_t* data);
 
 	bool HeartbeatIsActive;
 
 private slots:
-	void deferredInitOperations();
 	void StreamStatus();
 	void Heartbeat();
 	void TransitionDurationChanged(int ms);
 
 private:
-	static WSEventsPtr _instance;
-
 	WSServerPtr _srv;
-	OBSSource currentScene;
+	QTimer streamStatusTimer;
+	QTimer heartbeatTimer;
+	os_cpu_usage_info_t* cpuUsageInfo;
 
 	bool pulse;
 
-	bool _streamingActive;
-	bool _recordingActive;
-
 	uint64_t _streamStarttime;
-	uint64_t _recStarttime;
 
 	uint64_t _lastBytesSent;
 	uint64_t _lastBytesSentTime;
@@ -99,6 +99,8 @@ private:
 	void OnRecordingStarted();
 	void OnRecordingStopping();
 	void OnRecordingStopped();
+	void OnRecordingPaused();
+	void OnRecordingResumed();
 
 	void OnReplayStarting();
 	void OnReplayStarted();
@@ -110,10 +112,34 @@ private:
 
 	void OnExit();
 
+	static void FrontendEventHandler(
+		enum obs_frontend_event event, void* privateData);
+
 	static void OnTransitionBegin(void* param, calldata_t* data);
+	static void OnTransitionEnd(void* param, calldata_t* data);
+	static void OnTransitionVideoEnd(void* param, calldata_t* data);
+
+	static void OnSourceCreate(void* param, calldata_t* data);
+	static void OnSourceDestroy(void* param, calldata_t* data);
+
+	static void OnSourceVolumeChange(void* param, calldata_t* data);
+	static void OnSourceMuteStateChange(void* param, calldata_t* data);
+	static void OnSourceAudioSyncOffsetChanged(void* param, calldata_t* data);
+	static void OnSourceAudioMixersChanged(void* param, calldata_t* data);
+
+	static void OnSourceRename(void* param, calldata_t* data);
+
+	static void OnSourceFilterAdded(void* param, calldata_t* data);
+	static void OnSourceFilterRemoved(void* param, calldata_t* data);
+	static void OnSourceFilterVisibilityChanged(void* param, calldata_t* data);
+	static void OnSourceFilterOrderChanged(void* param, calldata_t* data);
 
 	static void OnSceneReordered(void* param, calldata_t* data);
 	static void OnSceneItemAdd(void* param, calldata_t* data);
 	static void OnSceneItemDelete(void* param, calldata_t* data);
 	static void OnSceneItemVisibilityChanged(void* param, calldata_t* data);
+	static void OnSceneItemLockChanged(void* param, calldata_t* data);
+	static void OnSceneItemTransform(void* param, calldata_t* data);
+	static void OnSceneItemSelected(void* param, calldata_t* data);
+	static void OnSceneItemDeselected(void* param, calldata_t* data);
 };

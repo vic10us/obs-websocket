@@ -18,46 +18,40 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #pragma once
 
-#include <QObject>
-#include <QMutex>
-#include <QSharedPointer>
-#include <QVariantHash>
-
 #include <map>
 #include <set>
+#include <QtCore/QObject>
+#include <QtCore/QMutex>
+#include <QtCore/QSharedPointer>
+#include <QtCore/QVariantHash>
+#include <QtCore/QThreadPool>
 
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
+#include "ConnectionProperties.h"
 #include "WSRequestHandler.h"
-
-QT_FORWARD_DECLARE_CLASS(QWebSocketServer)
-QT_FORWARD_DECLARE_CLASS(QWebSocket)
+#include "rpc/RpcEvent.h"
 
 using websocketpp::connection_hdl;
 
 typedef websocketpp::server<websocketpp::config::asio> server;
-
-class WSServer;
-typedef QSharedPointer<WSServer> WSServerPtr;
 
 class WSServer : public QObject
 {
 Q_OBJECT
 
 public:
-	static WSServerPtr Current();
-	static void ResetCurrent();
-
 	explicit WSServer();
 	virtual ~WSServer();
 	void start(quint16 port);
 	void stop();
-	void broadcast(std::string message);
+	void broadcast(const RpcEvent& event);
+	QThreadPool* threadPool() {
+		return &_threadPool;
+	}
 
 private:
-	static WSServerPtr _instance;
-
 	void onOpen(connection_hdl hdl);
 	void onMessage(connection_hdl hdl, server::message_ptr message);
 	void onClose(connection_hdl hdl);
@@ -69,6 +63,7 @@ private:
 	server _server;
 	quint16 _serverPort;
 	std::set<connection_hdl, std::owner_less<connection_hdl>> _connections;
-	std::map<connection_hdl, QVariantHash, std::owner_less<connection_hdl>> _connectionProperties;
+	std::map<connection_hdl, ConnectionProperties, std::owner_less<connection_hdl>> _connectionProperties;
 	QMutex _clMutex;
+	QThreadPool _threadPool;
 };

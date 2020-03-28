@@ -18,20 +18,21 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #pragma once
 
-#include <QString>
-#include <QSharedPointer>
-
-class Config;
-typedef QSharedPointer<Config> ConfigPtr;
+#include <obs-frontend-api.h>
+#include <util/config-file.h>
+#include <QtCore/QString>
+#include <QtCore/QSharedPointer>
 
 class Config {
 	public:
-		static ConfigPtr Current();
-
 		Config();
 		~Config();
 		void Load();
 		void Save();
+		void SetDefaults();
+		config_t* GetConfigStore();
+
+		void MigrateFromGlobalSettings();
 
 		void SetPassword(QString password);
 		bool CheckAuth(QString userChallenge);
@@ -52,5 +53,5 @@ class Config {
 		bool SettingsLoaded;
 
 	private:
-		static ConfigPtr _instance;
+		static void OnFrontendEvent(enum obs_frontend_event event, void* param);
 };

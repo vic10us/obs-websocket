@@ -19,6 +19,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #pragma once
 
 #include <obs.hpp>
+#include <memory>
 
 void ___source_dummy_addref(obs_source_t*);
 void ___sceneitem_dummy_addref(obs_sceneitem_t*);
@@ -37,7 +38,24 @@ using OBSDataArrayAutoRelease =
 using OBSOutputAutoRelease =
 	OBSRef<obs_output_t*, ___output_dummy_addref, obs_output_release>;
 
-#define PROP_AUTHENTICATED "wsclient_authenticated"
-#define OBS_WEBSOCKET_VERSION "4.5.0"
+void ___data_item_dummy_addref(obs_data_item_t*);
+void ___data_item_release(obs_data_item_t*);
+using OBSDataItemAutoRelease =
+	OBSRef<obs_data_item_t*, ___data_item_dummy_addref, ___data_item_release>;
+
+class Config;
+typedef std::shared_ptr<Config> ConfigPtr;
+
+class WSServer;
+typedef std::shared_ptr<WSServer> WSServerPtr;
+
+class WSEvents;
+typedef std::shared_ptr<WSEvents> WSEventsPtr;
+
+ConfigPtr GetConfig();
+WSServerPtr GetServer();
+WSEventsPtr GetEventsSystem();
+
+#define OBS_WEBSOCKET_VERSION "4.8.0"
 
 #define blog(level, msg, ...) blog(level, "[obs-websocket] " msg, ##__VA_ARGS__)

@@ -18,9 +18,11 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #include <obs-module.h>
 #include <obs-frontend-api.h>
-#include <QAction>
-#include <QMainWindow>
-#include <QTimer>
+#include <obs-data.h>
+
+#include <QtCore/QTimer>
+#include <QtWidgets/QAction>
+#include <QtWidgets/QMainWindow>
 
 #include "obs-websocket.h"
 #include "WSServer.h"
@@ -34,10 +36,17 @@ void ___data_dummy_addref(obs_data_t*) {}
 void ___data_array_dummy_addref(obs_data_array_t*) {}
 void ___output_dummy_addref(obs_output_t*) {}
 
+void ___data_item_dummy_addref(obs_data_item_t*) {}
+void ___data_item_release(obs_data_item_t* dataItem) {
+	obs_data_item_release(&dataItem);
+}
+
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("obs-websocket", "en-US")
 
-SettingsDialog* settings_dialog;
+ConfigPtr _config;
+WSServerPtr _server;
+WSEventsPtr _eventsSystem;
 
 bool obs_module_load(void) {
 	blog(LOG_INFO, "you can haz websockets (version %s)", OBS_WEBSOCKET_VERSION);
@@ -45,29 +54,39 @@ bool obs_module_load(void) {
 		QT_VERSION_STR, qVersion());
 
 	// Core setup
-	auto config = Config::Current();
-	config->Load();
+	_config = ConfigPtr(new Config());
+	_config->MigrateFromGlobalSettings(); // TODO remove this on the next minor jump
+	_config->Load();
 
-	WSEvents::ResetCurrent(WSServer::Current());
-
-	if (config->ServerEnabled) {
-		WSServer::Current()->start(config->ServerPort);
-	}
+	_server = WSServerPtr(new WSServer());
+	_eventsSystem = WSEventsPtr(new WSEvents(_server));
 
 	// UI setup
-	QAction* menu_action = (QAction*)obs_frontend_add_tools_menu_qaction(
-		obs_module_text("OBSWebsocket.Menu.SettingsItem")
-	);
-
 	obs_frontend_push_ui_translation(obs_module_get_string);
-	QMainWindow* main_window = (QMainWindow*)obs_frontend_get_main_window();
-	settings_dialog = new SettingsDialog(main_window);
+	QMainWindow* mainWindow = (QMainWindow*)obs_frontend_get_main_window();
+	SettingsDialog* settingsDialog = new SettingsDialog(mainWindow);
 	obs_frontend_pop_ui_translation();
 
-	auto menu_cb = [] {
-		settings_dialog->ToggleShowHide();
+	const char* menuActionText =
+		obs_module_text("OBSWebsocket.Settings.DialogTitle");
+	QAction* menuAction =
+		(QAction*)obs_frontend_add_tools_menu_qaction(menuActionText);
+	QObject::connect(menuAction, &QAction::triggered, [settingsDialog] {
+		// The settings dialog belongs to the main window. Should be ok
+		// to pass the pointer to this QAction belonging to the main window
+		settingsDialog->ToggleShowHide();
+	});
+
+	// Setup event handler to start the server once OBS is ready
+	auto eventCallback = [](enum obs_frontend_event event, void *param) {
+		if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
+			if (_config->ServerEnabled) {
+				_server->start(_config->ServerPort);
+			}
+			obs_frontend_remove_event_callback((obs_frontend_event_cb)param, nullptr);
+		}
 	};
-	menu_action->connect(menu_action, &QAction::triggered, menu_cb);
+	obs_frontend_add_event_callback(eventCallback, (void*)(obs_frontend_event_cb)eventCallback);
 
 	// Loading finished
 	blog(LOG_INFO, "module loaded!");
@@ -76,7 +95,23 @@ bool obs_module_load(void) {
 }
 
 void obs_module_unload() {
-	WSServer::Current()->stop();
+	_server->stop();
+
+	_eventsSystem.reset();
+	_server.reset();
+	_config.reset();
+
 	blog(LOG_INFO, "goodbye!");
 }
 
+ConfigPtr GetConfig() {
+	return _config;
+}
+
+WSServerPtr GetServer() {
+	return _server;
+}
+
+WSEventsPtr GetEventsSystem() {
+	return _eventsSystem;
+}
